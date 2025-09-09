@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Student Attendance Tracker</title>
+  <!--
+  Case Study 7 – Student Attendance Tracker
+  Deliverables Backlog (covered by this file):
+  1) Login: Role-based (Faculty / Student) auth (demo creds), session handling, logout
+  2) Attendance Marking: Date picker, per-student present/absent toggles, bulk actions, save to localStorage
+  3) Attendance Reports: Student-wise % summary, detailed daily records, export to CSV
+  4) Notifications: Low-attendance alerts (threshold configurable), recent events feed
+  Notes: Pure HTML/CSS/JS (no backend). Data persists in browser via localStorage.
+  -->
+  <style>
+    :root {
+      --bg: #0f172a;          /* slate-900 */
+      --panel: #111827;       /* gray-900 */
+      --muted: #1f2937;       /* gray-800 */
+      --text: #e5e7eb;        /* gray-200 */
+      --text-dim: #9ca3af;    /* gray-400 */
+      --brand: #38bdf8;       /* sky-400 */
+      --accent: #22c55e;      /* green-500 */
+      --warn: #f59e0b;        /* amber-500 */
+      --danger: #ef4444;      /* red-500 */
+      --shadow: 0 10px 25px rgba(0,0,0,.35);
+      --radius-xl: 16px;
+    }
+    *{box-sizing:border-box}
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; background: linear-gradient(120deg, #0b1023, #0f172a 35%, #0b1023); color: var(--text); }
+    .container { max-width: 1100px; margin: 32px auto; padding: 0 16px; }
+    .card { background: linear-gradient(180deg, var(--panel), #0d1426); border: 1px solid #1f2937; border-radius: var(--radius-xl); box-shadow: var(--shadow); }
+    .p-24 { padding: 24px; }
+    .p-16 { padding: 16px; }
+    .gap-16 { gap: 16px; }
+    .flex { display: flex; }
+    .grid { display: grid; }
+    .grid-2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
+    .grid-auto { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    .center { display: grid; place-items: center; }
+    .title { font-size: 28px; font-weight: 800; letter-spacing: .2px; }
+    .subtitle { color: var(--text-dim); font-size: 14px; }
+    .muted { color: var(--text-dim); }
+    .badge { display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; font-size:12px; border:1px solid #253047; background:#0c1326; }
+
+    label { font-size: 13px; color: var(--text-dim); display:block; margin-bottom: 6px; }
+    input, select, button, textarea { font: inherit; }
+    .input { width: 100%; padding: 12px 14px; background: #0b1222; border: 1px solid #1f2937; color: var(--text); border-radius: 12px; outline: none; }
+    .input:focus { border-color: #334155; box-shadow: 0 0 0 3px rgba(56,189,248,.15); }
+
+    .btn { appearance: none; border: 1px solid transparent; padding: 10px 14px; border-radius: 12px; cursor: pointer; font-weight: 600; transition: transform .02s ease, background .2s ease, border-color .2s ease; }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary { background: linear-gradient(180deg, #1e293b, #0b1222); border-color: #1f2937; color: var(--text); }
+    .btn-primary:hover { border-color: #334155; }
+    .btn-ghost { background: transparent; border-color: #253047; color: var(--text); }
+    .btn-ghost:hover { background: #0c1326; }
+    .btn-success { background: #0d3621; border-color: #134e31; color: #c7f9d2; }
+    .btn-warn { background: #3a2b09; border-color: #5a430e; color: #ffe6b0; }
+    .btn-danger { background: #3a0b0b; border-color: #661e1e; color: #ffd6d6; }
+    .btn-sm { padding: 6px 10px; border-radius: 10px; font-size: 13px; }
+
+    .table { width: 100%; border-collapse: collapse; }
+    .table th, .table td { padding: 12px; text-align: left; border-bottom: 1px solid #1e293b; }
+    .table th { color: var(--text-dim); font-weight: 600; font-size: 13px; }
+    .table tr:hover td { background: #0c1326; }
+
+    .toolbar { display:flex; flex-wrap: wrap; gap: 10px; align-items:center; }
+    .pill { padding:6px 10px; border-radius: 999px; background:#0b1222; border:1px solid #1f2937; font-size:12px; }
+    .right { margin-left: auto; }
+
+    .hidden { display: none !important; }
+    .mt-8{margin-top:8px} .mt-12{margin-top:12px} .mt-16{margin-top:16px} .mt-24{margin-top:24px} .mt-32{margin-top:32px}
+    .mb-8{margin-bottom:8px} .mb-16{margin-bottom:16px} .mb-24{margin-bottom:24px}
+    .w-100{width:100%}
+    .rounded{border-radius:12px}
+    .shadow{box-shadow: var(--shadow)}
+    .link{color:var(--brand); text-decoration:none}
+    .kpi { display:grid; gap:8px; padding:16px; border:1px solid #1f2937; border-radius:16px; background:#0b1222; }
+    .kpi .val{ font-size:24px; font-weight:800; }
+    .tag { font-size: 11px; padding: 2px 8px; border-radius: 999px; border:1px solid #26314a; background:#0c1326; color: var(--text-dim); }
+    .footnote{font-size:12px; color:var(--text-dim)}
+    .hr{height:1px; background:#1f2937; border:0;}
+
+    /* Toggle buttons */
+    .toggle { display:inline-grid; grid-auto-flow:column; gap:8px; padding:6px; background:#0b1222; border:1px solid #1f2937; border-radius:999px; }
+    .toggle button{ border-radius:999px; padding:6px 12px; border:1px solid #26314a; background:transparent; color:var(--text-dim); font-weight:700; }
+    .toggle button.active{ background:#0c1326; color:var(--text); }
+
+    .toast { position: fixed; bottom: 16px; right: 16px; background: #0b1222; border: 1px solid #1f2937; padding: 12px 16px; border-radius: 12px; box-shadow: var(--shadow); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="card p-16" style="display:flex; align-items:center; gap:16px;">
+      <div class="badge"><span>📚</span><strong>Attendance Tracker</strong></div>
+      <div class="right"></div>
+      <span id="sessionUser" class="subtitle"></span>
+      <button id="logoutBtn" class="btn btn-ghost btn-sm hidden">Logout</button>
+    </div>
+
+    <!-- Auth Card -->
+    <section id="authCard" class="card p-24 mt-24">
+      <div class="title">Welcome</div>
+      <div class="subtitle">Sign in as <strong>Faculty</strong> to mark attendance or as <strong>Student</strong> to view your report.</div>
+      <div class="grid grid-2 gap-16 mt-24">
+        <div>
+          <label for="role">Role</label>
+          <div class="toggle" id="roleToggle">
+            <button type="button" data-role="faculty" class="active">Faculty</button>
+            <button type="button" data-role="student">Student</button>
+          </div>
+        </div>
+        <div>
+          <label for="date">Today</label>
+          <input class="input" id="todayDisplay" type="text" disabled/>
+        </div>
+      </div>
+
+      <div class="grid grid-2 gap-16 mt-16" id="facultyFields">
+        <div>
+          <label for="email">Faculty Email</label>
+          <input class="input" id="email" placeholder="faculty@college.edu" value="faculty@college.edu"/>
+        </div>
+        <div>
+          <label for="password">Password</label>
+          <input class="input" id="password" type="password" placeholder="••••••" value="pass123"/>
+        </div>
+      </div>
+
+      <div class="grid grid-2 gap-16 mt-16 hidden" id="studentFields">
+        <div>
+          <label for="stuId">Student Roll No</label>
+          <input class="input" id="stuId" placeholder="e.g., S1001" value="S1001"/>
+        </div>
+        <div>
+          <label for="dob">DOB (for demo auth)</label>
+          <input class="input" id="dob" type="date"/>
+        </div>
+      </div>
+
+      <div class="toolbar mt-24">
+        <button class="btn btn-primary" id="loginBtn">Sign In</button>
+        <span class="pill">Demo Faculty: <code>faculty@college.edu / pass123</code></span>
+        <span class="pill">Demo Students: S1001, S1002, S1003 (any DOB)</span>
+      </div>
+    </section>
+
+    <!-- Faculty Dashboard -->
+    <section id="facultyDash" class="hidden">
+      <div class="grid grid-3 gap-16 mt-24">
+        <div class="kpi"><span class="muted">Students</span><span id="kpiStudents" class="val">0</span></div>
+        <div class="kpi"><span class="muted">Marked Today</span><span id="kpiMarked" class="val">0</span></div>
+        <div class="kpi"><span class="muted">Low Attendance (&lt;75%)</span><span id="kpiLow" class="val">0</span></div>
+      </div>
+
+      <div class="card p-24 mt-24">
+        <div class="toolbar">
+          <div>
+            <label for="attDate">Attendance Date</label>
+            <input class="input" id="attDate" type="date"/>
+          </div>
+          <div class="right"></div>
+          <button class="btn btn-ghost btn-sm" id="addStudentBtn">+ Add Student</button>
+          <button class="btn btn-warn btn-sm" id="markAllPresentBtn">Mark All Present</button>
+          <button class="btn btn-ghost btn-sm" id="clearMarksBtn">Clear</button>
+          <button class="btn btn-success" id="saveAttendanceBtn">Save Attendance</button>
+        </div>
+        <hr class="hr mt-16 mb-16"/>
+        <div class="grid grid-auto gap-16" id="studentList"></div>
+        <div class="footnote mt-16">Tip: Toggle each card to Present/Absent. Saved to localStorage per date.</div>
+      </div>
+
+      <div class="card p-24 mt-24">
+        <div class="toolbar">
+          <div>
+            <div class="title" style="font-size:20px">Reports</div>
+            <div class="subtitle">Filter by student and export.</div>
+          </div>
+          <div class="right"></div>
+          <select id="reportStudent" class="input" style="max-width:220px"></select>
+          <button class="btn btn-primary btn-sm" id="exportCsvBtn">Export CSV</button>
+        </div>
+        <table class="table mt-16" id="reportTable">
+          <thead><tr><th>Date</th><th>Roll No</th><th>Name</th><th>Status</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="mt-16">
+          <span class="badge">Overall %: <strong id="overallPct" style="margin-left:8px">—</strong></span>
+        </div>
+      </div>
+
+      <div class="card p-24 mt-24">
+        <div class="title" style="font-size:20px">Notifications</div>
+        <div class="subtitle">Recent events & alerts</div>
+        <ul id="notifFeed" class="mt-16"></ul>
+      </div>
+    </section>
+
+    <!-- Student Dashboard -->
+    <section id="studentDash" class="hidden">
+      <div class="card p-24 mt-24">
+        <div class="toolbar">
+          <div>
+            <div class="title" style="font-size:22px">My Attendance</div>
+            <div class="subtitle" id="studentNameLbl">—</div>
+          </div>
+          <div class="right"></div>
+          <span class="badge">Threshold: <strong id="thresholdLbl">75%</strong></span>
+        </div>
+        <div class="grid grid-3 gap-16 mt-24">
+          <div class="kpi"><span class="muted">Total Classes</span><span id="stuTotal" class="val">0</span></div>
+          <div class="kpi"><span class="muted">Present</span><span id="stuPresent" class="val">0</span></div>
+          <div class="kpi"><span class="muted">Attendance %</span><span id="stuPct" class="val">0%</span></div>
+        </div>
+        <table class="table mt-24" id="studentTable">
+          <thead><tr><th>Date</th><th>Status</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div id="studentAlert" class="mt-16"></div>
+      </div>
+      <div class="card p-24 mt-24">
+        <div class="title" style="font-size:20px">Notifications</div>
+        <ul id="studentNotifFeed" class="mt-16"></ul>
+      </div>
+    </section>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <template id="studentCardTpl">
+    <div class="p-16 rounded" style="border:1px solid #1f2937; background:#0b1222; display:grid; gap:10px;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div style="width:38px; height:38px; border-radius:10px; background:#0c1326; display:grid; place-items:center; border:1px solid #26314a;">🎓</div>
+        <div style="display:grid;">
+          <strong class="name">Name</strong>
+          <span class="muted roll">S1001</span>
+        </div>
+        <div class="right"></div>
+        <span class="tag pct">—</span>
+      </div>
+      <div class="toggle">
+        <button type="button" class="btnPresent">Present</button>
+        <button type="button" class="btnAbsent">Absent</button>
+      </div>
+    </div>
+  </template>
+
+  <script>
+    /* --------------------------- Utilities & Store --------------------------- */
+    const $ = (sel, root=document) => root.querySelector(sel);
+    const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+
+    const store = {
+      key: 'att-app-v1',
+      get() {
+        const d = JSON.parse(localStorage.getItem(this.key) || '{}');
+        if (!d.students) d.students = [
+          { id: 'S1001', name: 'Asha Sharma' },
+          { id: 'S1002', name: 'Rohan Mehta' },
+          { id: 'S1003', name: 'Priya Singh' }
+        ];
+        if (!d.attendance) d.attendance = { /* date: { studentId: 'P'|'A' } */ };
+        if (!d.notifications) d.notifications = [];
+        if (typeof d.threshold !== 'number') d.threshold = 75;
+        if (!d.users) d.users = { faculty: { email: 'faculty@college.edu', password: 'pass123' } };
+        return d;
+      },
+      set(d) { localStorage.setItem(this.key, JSON.stringify(d)); },
+      patch(p) { const d = this.get(); Object.assign(d, p); this.set(d); }
+    };
+
+    const fmtDate = (d) => new Date(d).toISOString().slice(0,10);
+    const today = fmtDate(new Date());
+
+    function toast(msg) {
+      const t = $('#toast');
+      t.textContent = msg; t.classList.remove('hidden');
+      setTimeout(()=> t.classList.add('hidden'), 2200);
+    }
+
+    function addNotif(text) {
+      const d = store.get();
+      d.notifications.unshift({ id: Date.now(), text, ts: new Date().toISOString() });
+      d.notifications = d.notifications.slice(0, 50);
+      store.set(d);
+      renderNotifications();
+    }
+
+    /* ------------------------------- Auth Flow ------------------------------ */
+    const session = { user: null };
+
+    function setSession(u){ session.user = u; $('#sessionUser').textContent = u ? `${u.role.toUpperCase()} • ${u.label}` : ''; $('#logoutBtn').classList.toggle('hidden', !u); }
+
+    function login(){
+      const role = $('#roleToggle button.active').dataset.role;
+      if (role === 'faculty') {
+        const email = $('#email').value.trim();
+        const pw = $('#password').value.trim();
+        const d = store.get();
+        if (d.users.faculty.email === email && d.users.faculty.password === pw){
+          setSession({ role:'faculty', label: email });
+          $('#authCard').classList.add('hidden');
+          $('#facultyDash').classList.remove('hidden');
+          initFaculty();
+          addNotif('👩🏽‍🏫 Faculty signed in');
+        } else {
+          toast('Invalid faculty credentials');
+        }
+      } else {
+        const id = $('#stuId').value.trim().toUpperCase();
+        const d = store.get();
+        const found = d.students.find(s=>s.id===id);
+        if(found){
+          setSession({ role:'student', label: `${found.name} (${found.id})`, id: found.id });
+          $('#authCard').classList.add('hidden');
+          $('#studentDash').classList.remove('hidden');
+          initStudent(found);
+          addNotif(`🎓 ${found.name} viewed attendance`);
+        } else {
+          toast('Student not found');
+        }
+      }
+    }
+
+    $('#loginBtn').addEventListener('click', login);
+    $('#logoutBtn').addEventListener('click', ()=>{ setSession(null); location.reload(); });
+
+    // Role toggle
+    $$('#roleToggle button').forEach(b=> b.addEventListener('click', ()=>{
+      $$('#roleToggle button').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      const isFaculty = b.dataset.role==='faculty';
+      $('#facultyFields').classList.toggle('hidden', !isFaculty);
+      $('#studentFields').classList.toggle('hidden', isFaculty);
+    }));
+
+    /* --------------------------- Faculty Dashboard -------------------------- */
+    function initFaculty(){
+      const d = store.get();
+      $('#todayDisplay').value = new Date().toLocaleString();
+      $('#attDate').value = today;
+      renderStudentCards();
+      renderReportStudentOptions();
+      renderNotifications();
+      refreshKPIs();
+    }
+
+    function getAttendanceForDate(date){
+      const d = store.get();
+      return d.attendance[date] || {}; // { id: 'P'|'A' }
+    }
+
+    function setAttendanceForDate(date, record){
+      const d = store.get();
+      d.attendance[date] = record; store.set(d);
+    }
+
+    function renderStudentCards(){
+      const d = store.get();
+      const container = $('#studentList'); container.innerHTML='';
+      const date = $('#attDate').value || today;
+      const rec = getAttendanceForDate(date);
+      d.students.forEach(stu=>{
+        const tpl = document.importNode($('#studentCardTpl').content, true);
+        $('.name', tpl).textContent = stu.name;
+        $('.roll', tpl).textContent = stu.id;
+        const pct = computeStudentPct(stu.id);
+        $('.pct', tpl).textContent = pct.total? `${pct.pct}%` : '—';
+        const btnP = $('.btnPresent', tpl), btnA = $('.btnAbsent', tpl);
+        const status = rec[stu.id] || null;
+        function setActive(s){ btnP.classList.toggle('active', s==='P'); btnA.classList.toggle('active', s==='A'); }
+        setActive(status);
+        btnP.addEventListener('click', ()=>{ setActive('P'); rec[stu.id]='P'; });
+        btnA.addEventListener('click', ()=>{ setActive('A'); rec[stu.id]='A'; });
+        container.appendChild(tpl);
+      });
+
+      // bind toolbar actions
+      $('#markAllPresentBtn').onclick = ()=>{ d.students.forEach(s=> rec[s.id]='P'); renderStudentCards(); };
+      $('#clearMarksBtn').onclick = ()=>{ d.students.forEach(s=> delete rec[s.id]); renderStudentCards(); };
+      $('#saveAttendanceBtn').onclick = ()=>{
+        setAttendanceForDate(date, rec);
+        toast('Attendance saved');
+        addNotif(`🗓️ Attendance saved for ${date}`);
+        refreshKPIs();
+        renderReports();
+      };
+
+      $('#addStudentBtn').onclick = ()=>{
+        const id = prompt('New Roll No (e.g., S1004)'); if(!id) return;
+        const name = prompt('Student Name'); if(!name) return;
+        const data = store.get();
+        if (data.students.some(s=>s.id===id)) { toast('Roll already exists'); return; }
+        data.students.push({ id, name }); store.set(data);
+        toast('Student added'); addNotif(`➕ Added ${name} (${id})`);
+        renderStudentCards(); renderReportStudentOptions(); refreshKPIs();
+      };
+
+      $('#attDate').onchange = renderStudentCards;
+    }
+
+    function refreshKPIs(){
+      const d = store.get();
+      $('#kpiStudents').textContent = d.students.length;
+      const rec = getAttendanceForDate($('#attDate').value || today);
+      $('#kpiMarked').textContent = Object.keys(rec).length;
+      const low = d.students.filter(s=> (computeStudentPct(s.id).pct || 0) < d.threshold).length;
+      $('#kpiLow').textContent = low;
+    }
+
+    /* ------------------------------- Reports -------------------------------- */
+    function renderReportStudentOptions(){
+      const d = store.get();
+      const sel = $('#reportStudent'); sel.innerHTML = '<option value="ALL">All Students</option>' + d.students.map(s=>`<option value="${s.id}">${s.name} (${s.id})</option>`).join('');
+      renderReports();
+      sel.onchange = renderReports;
+    }
+
+    function renderReports(){
+      const d = store.get();
+      const tbody = $('#reportTable tbody'); tbody.innerHTML = '';
+      const who = $('#reportStudent').value || 'ALL';
+      const rows = [];
+      Object.entries(d.attendance).forEach(([date, rec])=>{
+        (who==='ALL' ? d.students : d.students.filter(s=>s.id===who)).forEach(s=>{
+          const status = rec[s.id];
+          if(status){ rows.push({ date, id: s.id, name: s.name, status }); }
+        })
+      });
+      rows.sort((a,b)=> a.date.localeCompare(b.date));
+      rows.forEach(r=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${r.date}</td><td>${r.id}</td><td>${r.name}</td><td>${r.status==='P' ? 'Present' : 'Absent'}</td>`;
+        tbody.appendChild(tr);
+      });
+      // Overall % for selected student(s)
+      let total=0, present=0;
+      const map = {}; // date -> rec
+      Object.values(d.attendance).forEach(rec=> Object.assign(map, rec));
+      if (who==='ALL'){
+        d.students.forEach(s=>{ const x = computeStudentPct(s.id); total += x.total; present += x.present; });
+      } else {
+        const x = computeStudentPct(who); total = x.total; present = x.present;
+      }
+      const pct = total? Math.round((present/total)*100): 0;
+      $('#overallPct').textContent = total? pct + '%' : '—';
+
+      // Export
+      $('#exportCsvBtn').onclick = ()=> exportCsv(rows.length? rows : [{date:'', id:'', name:'', status:''}]);
+    }
+
+    function exportCsv(rows){
+      const header = ['Date','Roll No','Name','Status'];
+      const csv = [header.join(',')].concat(rows.map(r=>[r.date, r.id, r.name, r.status].join(','))).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download='attendance.csv'; a.click(); URL.revokeObjectURL(url);
+      toast('CSV exported');
+    }
+
+    function computeStudentPct(id){
+      const d = store.get();
+      let total=0, present=0; Object.values(d.attendance).forEach(rec=>{ if (id in rec) { total++; if (rec[id]==='P') present++; } });
+      const pct = total? Math.round((present/total)*100): 0; return { total, present, pct };
+    }
+
+    /* ----------------------------- Notifications ---------------------------- */
+    function renderNotifications(){
+      const d = store.get();
+      const ul = $('#notifFeed'); if(ul){ ul.innerHTML = d.notifications.map(n=>`<li class="mb-8">${new Date(n.ts).toLocaleString()} • ${n.text}</li>`).join(''); }
+      const ul2 = $('#studentNotifFeed'); if(ul2){ ul2.innerHTML = d.notifications.slice(0,10).map(n=>`<li class="mb-8">${new Date(n.ts).toLocaleString()} • ${n.text}</li>`).join(''); }
+    }
+
+    /* --------------------------- Student Dashboard -------------------------- */
+    function initStudent(stu){
+      const d = store.get();
+      $('#todayDisplay').value = new Date().toLocaleString();
+      $('#thresholdLbl').textContent = d.threshold + '%';
+      $('#studentNameLbl').textContent = `${stu.name} (${stu.id})`;
+      const stats = computeStudentPct(stu.id);
+      $('#stuTotal').textContent = stats.total; $('#stuPresent').textContent = stats.present; $('#stuPct').textContent = stats.total? stats.pct + '%' : '—';
+      const tbody = $('#studentTable tbody'); tbody.innerHTML = '';
+      Object.entries(d.attendance).sort(([a],[b])=> a.localeCompare(b)).forEach(([date, rec])=>{
+        if (stu.id in rec){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${date}</td><td>${rec[stu.id]==='P' ? 'Present' : 'Absent'}</td>`;
+          tbody.appendChild(tr);
+        }
+      });
+      // Alert
+      const alert = $('#studentAlert');
+      alert.innerHTML = '';
+      if (stats.total && stats.pct < d.threshold){
+        alert.innerHTML = `<div class="badge" style="border-color:#5a430e;background:#3a2b09">⚠️ Your attendance (${stats.pct}%) is below the threshold of ${d.threshold}%</div>`;
+      } else if(stats.total){
+        alert.innerHTML = `<div class="badge" style="border-color:#134e31;background:#0d3621;color:#c7f9d2">✅ Good standing</div>`;
+      }
+      renderNotifications();
+    }
+
+    /* --------------------------------- Init -------------------------------- */
+    (function boot(){
+      $('#todayDisplay').value = new Date().toLocaleString();
+    })();
+  </script>
+</body>
+</html>
